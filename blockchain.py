@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
 import hashlib
 import uvicorn
@@ -44,7 +44,7 @@ class Blockchain(object):
 
         return block
 
-    def new_transactions(self, sender, recipient, amount):
+    def new_transaction(self, sender, recipient, amount):
         """Create a new transaction to go into the next mined Block
 
         Args:
@@ -126,14 +126,40 @@ node_indentifier = str(uuid4()).replace("-", " ")
 blockchain = Blockchain()
 
 
-@app.get("/mine")
+@app.get("/mine", status_code=200)
 async def mine():
-    return "We'll mine a new Block"
+    # Use proof of work algorithm to get the next proof
+    last_block = blockchain.last_block
+    last_proof = last_block["proof"]
+    proof = blockchain.proof_of_work(last_proof)
+
+    # Reward the miner 1 coin for finding the new proof
+    # Sender is set to "0" to signify that this coin is mined
+    blockchain.new_transaction(sender="0", recipient=node_indentifier, amount=1)
+
+    # Forge a new Block with the with the mined coin to the chain
+    previous_hash = blockchain.hash(last_block)
+    block = blockchain.new_block(proof, previous_hash)
+
+    response = {
+        "message": "New Block Forged",
+        "index": block["index"],
+        "transactions": block["transactions"],
+        "proof": block["proof"],
+        "previous_hash": block["previous_hash"],
+    }
+    return response
 
 
-@app.post("/transaction/new")
+# Using pydantic Model, the required fields are automatically checked
+@app.post("/transaction/new", status_code=201)
 async def new_transactions(transaction: Transaction):
-    return "We'll add a new transaction"
+    # Create a new Transaction
+    index = blockchain.new_transaction(
+        transaction.sender, transaction.recipient, transaction.amount
+    )
+    response = {"message": f"Transaction will be added to {index}"}
+    return response
 
 
 @app.get("/chain", status_code=200)
