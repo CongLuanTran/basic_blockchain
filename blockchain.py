@@ -1,9 +1,16 @@
-from fastapi import FastAPI, requests
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
 import hashlib
 import uvicorn
 import json
 from uuid import uuid4
 from time import time
+
+
+class Transaction(BaseModel):
+    sender: str
+    recipient: str
+    amount: int
 
 
 class Blockchain(object):
@@ -125,7 +132,7 @@ async def mine():
 
 
 @app.post("/transaction/new")
-async def new_transactions():
+async def new_transactions(transaction: Transaction):
     return "We'll add a new transaction"
 
 
