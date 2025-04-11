@@ -15,6 +15,10 @@ class Transaction(BaseModel):
     amount: int
 
 
+class Nodes(BaseModel):
+    nodes: list[str]
+
+
 class Blockchain(object):
     def __init__(self):
         self.nodes = set()
@@ -208,14 +212,13 @@ async def mine():
     previous_hash = blockchain.hash(last_block)
     block = blockchain.new_block(proof, previous_hash)
 
-    response = {
+    return {
         "message": "New Block Forged",
         "index": block["index"],
         "transactions": block["transactions"],
         "proof": block["proof"],
         "previous_hash": block["previous_hash"],
     }
-    return response
 
 
 # Using pydantic Model, the required fields are automatically checked
@@ -225,13 +228,33 @@ async def new_transactions(transaction: Transaction):
     index = blockchain.new_transaction(
         transaction.sender, transaction.recipient, transaction.amount
     )
-    response = {"message": f"Transaction will be added to {index}"}
-    return response
+    return {"message": f"Transaction will be added to {index}"}
 
 
 @app.get("/chain", status_code=200)
 async def full_chain():
     return {"chain": blockchain.chain, "length": len(blockchain.chain)}
+
+
+@app.post("/node/register", status_code=201)
+def register_nodes(nodes: Nodes):
+    for node in nodes.nodes:
+        blockchain.register_node(node)
+
+    return {
+        "message": "New nodes have been added",
+        "total_nodes": list(blockchain.nodes),
+    }
+
+
+@app.get("/node/resolve", status_code=200)
+def consensus():
+    replaced = blockchain.resolve_conflicts()
+    if replaced:
+        response = {"message": "Our chain was replaced", "new_chain": blockchain.chain}
+    else:
+        response = {"message": "Our chain is authoritative", "chain": blockchain.chain}
+    return response
 
 
 if __name__ == "__main__":
