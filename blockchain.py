@@ -19,10 +19,37 @@ class Nodes(BaseModel):
     nodes: list[str]
 
 
+class Block:
+    def __init__(self, index, timestamp, transactions, proof, previous_hash):
+        self.index = index
+        self.timestamp = timestamp
+        self.transactions = transactions
+        self.previous_hash = previous_hash
+        self.proof = proof
+
+    def hash(self):
+        """Create a SHA-256 hash of this block
+
+        Returns:
+            str: hash of this block
+        """
+        block_string = json.dumps(
+            {
+                "index": self.index,
+                "timestamp": self.timestamp,
+                "transactions": self.transactions,
+                "proof": self.proof,
+                "previous_hash": self.previous_hash,
+            },
+            sort_keys=True,
+        ).encode()
+        return hashlib.sha256(block_string).hexdigest()
+
+
 class Blockchain(object):
     def __init__(self):
         self.nodes = set()
-        self.chain = []
+        self.chain: list[Block] = []
         self.current_transactions = []
 
         self.new_block(previous_hash=1, proof=100)
@@ -36,7 +63,7 @@ class Blockchain(object):
         parsed_url = urlparse(address)
         self.nodes.add(parsed_url.netloc)
 
-    def valid_chain(self, chain):
+    def valid_chain(self, chain: list[Block]):
         """Determine if a given block chain is valid
 
         Args:
@@ -55,11 +82,11 @@ class Blockchain(object):
             print("\n------------\n")
 
             # Check that the hash of the block is correct
-            if block["previous_hash"] != self.hash(last_block):
+            if block.previous_hash != last_block.hash():
                 return False
 
             # Check that Proof of Work is correct
-            if not self.valid_proof(last_block["proof"], block["proof"]):
+            if not self.valid_proof(last_block.proof, block.proof):
                 return False
 
             last_block = block
@@ -101,13 +128,13 @@ class Blockchain(object):
         Returns:
             dict: New Block
         """
-        block = {
-            "index": len(self.chain) + 1,
-            "timestamp": time(),
-            "transactions": self.current_transactions,
-            "proof": proof,
-            "previous_hash": previous_hash or self.hash(self.chain[-1]),
-        }
+        block = Block(
+            len(self.chain) + 1,
+            time(),
+            self.current_transactions,
+            proof,
+            previous_hash or self.last_block.hash(),
+        )
 
         self.current_transactions = []
 
@@ -134,20 +161,7 @@ class Blockchain(object):
             }
         )
 
-        return self.last_block["index"] + 1
-
-    @staticmethod
-    def hash(block):
-        """Create a SHA-256 hash of a Block
-
-        Args:
-            block (dict): Block
-
-        Returns:
-            str
-        """
-        block_string = json.dumps(block, sort_keys=True).encode()
-        return hashlib.sha256(block_string).hexdigest()
+        return self.last_block.index + 1
 
     @property
     def last_block(self):
@@ -201,7 +215,7 @@ blockchain = Blockchain()
 async def mine():
     # Use proof of work algorithm to get the next proof
     last_block = blockchain.last_block
-    last_proof = last_block["proof"]
+    last_proof = last_block.proof
     proof = blockchain.proof_of_work(last_proof)
 
     # Reward the miner 1 coin for finding the new proof
@@ -209,15 +223,15 @@ async def mine():
     blockchain.new_transaction(sender="0", recipient=node_indentifier, amount=1)
 
     # Forge a new Block with the with the mined coin to the chain
-    previous_hash = blockchain.hash(last_block)
+    previous_hash = last_block.hash()
     block = blockchain.new_block(proof, previous_hash)
 
     return {
         "message": "New Block Forged",
-        "index": block["index"],
-        "transactions": block["transactions"],
-        "proof": block["proof"],
-        "previous_hash": block["previous_hash"],
+        "index": block.index,
+        "transactions": block.transactions,
+        "proof": block.proof,
+        "previous_hash": block.previous_hash,
     }
 
 
